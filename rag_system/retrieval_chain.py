@@ -4,10 +4,9 @@ import os
 from typing import List, Dict, Any, Optional, Tuple
 
 from langchain_openai import AzureChatOpenAI
-from langchain.schema import HumanMessage, AIMessage, BaseMessage
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema.output_parser import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 
 from .vector_store import VectorStore
