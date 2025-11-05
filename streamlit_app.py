@@ -2,8 +2,58 @@
 
 import streamlit as st
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for local development)
+load_dotenv()
+
+# Load secrets from Streamlit Cloud (for production)
+# Streamlit Cloud secrets are accessed via st.secrets
+if hasattr(st, 'secrets') and st.secrets:
+    # Map Streamlit secrets to environment variables
+    secrets = st.secrets
+    
+    # LLM credentials
+    if 'AZURE_OPENAI_LLM_ENDPOINT' in secrets:
+        os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_LLM_ENDPOINT']
+    if 'AZURE_OPENAI_LLM_API_KEY' in secrets:
+        os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_LLM_API_KEY']
+    if 'AZURE_OPENAI_LLM_MODEL' in secrets:
+        os.environ['AZURE_OPENAI_LLM_MODEL'] = secrets['AZURE_OPENAI_LLM_MODEL']
+    if 'AZURE_OPENAI_LLM_API_VERSION' in secrets:
+        os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_LLM_API_VERSION']
+    
+    # Embedding credentials
+    if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' in secrets:
+        os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_EMBEDDING_ENDPOINT']
+    if 'AZURE_OPENAI_EMBEDDING_API_KEY' in secrets:
+        os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_EMBEDDING_API_KEY']
+    if 'AZURE_OPENAI_EMBED_MODEL' in secrets:
+        os.environ['AZURE_OPENAI_EMBED_MODEL'] = secrets['AZURE_OPENAI_EMBED_MODEL']
+    if 'AZURE_OPENAI_EMBEDDING_API_VERSION' in secrets:
+        os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_EMBEDDING_API_VERSION']
+    
+    # Fallback to general credentials if specific ones not set
+    if 'AZURE_OPENAI_ENDPOINT' in secrets:
+        if 'AZURE_OPENAI_LLM_ENDPOINT' not in os.environ:
+            os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
+        if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' not in os.environ:
+            os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
+    
+    if 'AZURE_OPENAI_API_KEY' in secrets:
+        if 'AZURE_OPENAI_LLM_API_KEY' not in os.environ:
+            os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
+        if 'AZURE_OPENAI_EMBEDDING_API_KEY' not in os.environ:
+            os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
+    
+    if 'AZURE_OPENAI_API_VERSION' in secrets:
+        if 'AZURE_OPENAI_LLM_API_VERSION' not in os.environ:
+            os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
+        if 'AZURE_OPENAI_EMBEDDING_API_VERSION' not in os.environ:
+            os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
 
 # Add the project root to the Python path
 project_root = Path(__file__).parent
@@ -78,7 +128,32 @@ def create_chatbot(use_case: str, enable_functions: bool) -> RAGChatbot:
         return RAGChatbot(use_case=use_case, enable_functions=enable_functions)
     except Exception as e:
         st.error(f"Failed to initialize chatbot: {str(e)}")
-        st.info("Please make sure your .env file is configured with Azure OpenAI credentials.")
+        
+        # Check if we're on Streamlit Cloud
+        if hasattr(st, 'secrets') and st.secrets:
+            st.warning("""
+            **Streamlit Cloud Configuration Required:**
+            
+            Please add your Azure OpenAI credentials to Streamlit Cloud Secrets:
+            
+            1. Go to your Streamlit Cloud dashboard
+            2. Click on your app → Settings → Secrets
+            3. Add the following secrets in TOML format:
+            
+            ```toml
+            AZURE_OPENAI_LLM_ENDPOINT = "https://aiportalapi.stu-platform.live/jpe"
+            AZURE_OPENAI_LLM_API_KEY = "your-llm-api-key"
+            AZURE_OPENAI_LLM_MODEL = "GPT-4o-mini"
+            AZURE_OPENAI_LLM_API_VERSION = "2024-02-15-preview"
+            
+            AZURE_OPENAI_EMBEDDING_ENDPOINT = "https://aiportalapi.stu-platform.live/jpe"
+            AZURE_OPENAI_EMBEDDING_API_KEY = "your-embedding-api-key"
+            AZURE_OPENAI_EMBED_MODEL = "text-embedding-3-small"
+            AZURE_OPENAI_EMBEDDING_API_VERSION = "2024-02-15-preview"
+            ```
+            """)
+        else:
+            st.info("Please make sure your .env file is configured with Azure OpenAI credentials.")
         return None
 
 def display_chat_message(message: dict, is_user: bool = True):
