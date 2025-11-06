@@ -25,3 +25,5 @@ streamlit>=1.32.0
 # Additional utilities
 tqdm>=4.66.0
 rich>=13.7.0
+gTTS>=2.5.0
+edge-tts>=6.1.5

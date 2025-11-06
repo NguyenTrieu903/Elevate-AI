@@ -10,56 +10,68 @@ from dotenv import load_dotenv
 # Load environment variables from .env file (for local development)
 load_dotenv()
 
-# Load secrets from Streamlit Cloud (for production)
-# Streamlit Cloud secrets are accessed via st.secrets
-if hasattr(st, 'secrets') and st.secrets:
-    # Map Streamlit secrets to environment variables
-    secrets = st.secrets
+# Load secrets from Streamlit Cloud (for production) safely
+# Accessing st.secrets when no secrets file exists may raise an error; guard it.
+try:
+    has_secrets = False
+    secrets_file_exists = any([
+        (Path.home() / ".streamlit/secrets.toml").exists(),
+        (Path(__file__).parent / ".streamlit/secrets.toml").exists(),
+    ])
+    if secrets_file_exists and hasattr(st, 'secrets'):
+        has_secrets = True
     
-    # LLM credentials
-    if 'AZURE_OPENAI_LLM_ENDPOINT' in secrets:
-        os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_LLM_ENDPOINT']
-    if 'AZURE_OPENAI_LLM_API_KEY' in secrets:
-        os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_LLM_API_KEY']
-    if 'AZURE_OPENAI_LLM_MODEL' in secrets:
-        os.environ['AZURE_OPENAI_LLM_MODEL'] = secrets['AZURE_OPENAI_LLM_MODEL']
-    if 'AZURE_OPENAI_LLM_API_VERSION' in secrets:
-        os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_LLM_API_VERSION']
-    
-    # Embedding credentials
-    if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' in secrets:
-        os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_EMBEDDING_ENDPOINT']
-    if 'AZURE_OPENAI_EMBEDDING_API_KEY' in secrets:
-        os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_EMBEDDING_API_KEY']
-    if 'AZURE_OPENAI_EMBED_MODEL' in secrets:
-        os.environ['AZURE_OPENAI_EMBED_MODEL'] = secrets['AZURE_OPENAI_EMBED_MODEL']
-    if 'AZURE_OPENAI_EMBEDDING_API_VERSION' in secrets:
-        os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_EMBEDDING_API_VERSION']
-    
-    # Fallback to general credentials if specific ones not set
-    if 'AZURE_OPENAI_ENDPOINT' in secrets:
-        if 'AZURE_OPENAI_LLM_ENDPOINT' not in os.environ:
-            os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
-        if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' not in os.environ:
-            os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
-    
-    if 'AZURE_OPENAI_API_KEY' in secrets:
-        if 'AZURE_OPENAI_LLM_API_KEY' not in os.environ:
-            os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
-        if 'AZURE_OPENAI_EMBEDDING_API_KEY' not in os.environ:
-            os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
-    
-    if 'AZURE_OPENAI_API_VERSION' in secrets:
-        if 'AZURE_OPENAI_LLM_API_VERSION' not in os.environ:
-            os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
-        if 'AZURE_OPENAI_EMBEDDING_API_VERSION' not in os.environ:
-            os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
+    if has_secrets:
+        secrets = st.secrets  # type: ignore
+
+        # LLM credentials
+        if 'AZURE_OPENAI_LLM_ENDPOINT' in secrets:
+            os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_LLM_ENDPOINT']
+        if 'AZURE_OPENAI_LLM_API_KEY' in secrets:
+            os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_LLM_API_KEY']
+        if 'AZURE_OPENAI_LLM_MODEL' in secrets:
+            os.environ['AZURE_OPENAI_LLM_MODEL'] = secrets['AZURE_OPENAI_LLM_MODEL']
+        if 'AZURE_OPENAI_LLM_API_VERSION' in secrets:
+            os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_LLM_API_VERSION']
+
+        # Embedding credentials
+        if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' in secrets:
+            os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_EMBEDDING_ENDPOINT']
+        if 'AZURE_OPENAI_EMBEDDING_API_KEY' in secrets:
+            os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_EMBEDDING_API_KEY']
+        if 'AZURE_OPENAI_EMBED_MODEL' in secrets:
+            os.environ['AZURE_OPENAI_EMBED_MODEL'] = secrets['AZURE_OPENAI_EMBED_MODEL']
+        if 'AZURE_OPENAI_EMBEDDING_API_VERSION' in secrets:
+            os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_EMBEDDING_API_VERSION']
+
+        # Fallback to general credentials if specific ones not set
+        if 'AZURE_OPENAI_ENDPOINT' in secrets:
+            if 'AZURE_OPENAI_LLM_ENDPOINT' not in os.environ:
+                os.environ['AZURE_OPENAI_LLM_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
+            if 'AZURE_OPENAI_EMBEDDING_ENDPOINT' not in os.environ:
+                os.environ['AZURE_OPENAI_EMBEDDING_ENDPOINT'] = secrets['AZURE_OPENAI_ENDPOINT']
+
+        if 'AZURE_OPENAI_API_KEY' in secrets:
+            if 'AZURE_OPENAI_LLM_API_KEY' not in os.environ:
+                os.environ['AZURE_OPENAI_LLM_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
+            if 'AZURE_OPENAI_EMBEDDING_API_KEY' not in os.environ:
+                os.environ['AZURE_OPENAI_EMBEDDING_API_KEY'] = secrets['AZURE_OPENAI_API_KEY']
+
+        if 'AZURE_OPENAI_API_VERSION' in secrets:
+            if 'AZURE_OPENAI_LLM_API_VERSION' not in os.environ:
+                os.environ['AZURE_OPENAI_LLM_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
+            if 'AZURE_OPENAI_EMBEDDING_API_VERSION' not in os.environ:
+                os.environ['AZURE_OPENAI_EMBEDDING_API_VERSION'] = secrets['AZURE_OPENAI_API_VERSION']
+except Exception:
+    # If anything goes wrong with secrets loading, continue with .env only
+    pass
 
 # Add the project root to the Python path
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
 from rag_system.chat_interface import RAGChatbot
+from rag_system.text_to_speech import synthesize_to_mp3_bytes
 
 # Page configuration
 st.set_page_config(
@@ -121,6 +133,44 @@ def initialize_session_state():
         st.session_state.chat_history = []
     if 'use_case' not in st.session_state:
         st.session_state.use_case = "it_helpdesk"
+    if 'in_demo' not in st.session_state:
+        st.session_state.in_demo = False
+
+# -----------------------------
+# TTS helpers (cached + concurrent)
+# -----------------------------
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+@st.cache_data(show_spinner=False)
+def _cached_tts(text: str, lang: str) -> bytes | None:
+    return synthesize_to_mp3_bytes(text, lang)
+
+def generate_tts_concurrently(items: list[tuple[int, str]], lang: str, workers: int = 4) -> dict[int, bytes]:
+    """Generate TTS for multiple texts in parallel.
+
+    items: list of (message_index, text)
+    returns: mapping index -> audio bytes (only successful ones)
+    """
+    results: dict[int, bytes] = {}
+    if not items:
+        return results
+    progress = st.progress(0, text="Generating audio...")
+    total = len(items)
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futures = {ex.submit(_cached_tts, text[:4000], lang): idx for idx, text in items}
+        done_count = 0
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            try:
+                data = fut.result()
+                if data:
+                    results[idx] = data
+            except Exception:
+                pass
+            done_count += 1
+            progress.progress(min(1.0, done_count / total))
+    progress.empty()
+    return results
 
 def create_chatbot(use_case: str, enable_functions: bool) -> RAGChatbot:
     """Create or recreate chatbot with specified settings."""
@@ -156,7 +206,7 @@ def create_chatbot(use_case: str, enable_functions: bool) -> RAGChatbot:
             st.info("Please make sure your .env file is configured with Azure OpenAI credentials.")
         return None
 
-def display_chat_message(message: dict, is_user: bool = True):
+def display_chat_message(message: dict, is_user: bool = True, index: int = 0):
     """Display a chat message with appropriate styling."""
     if is_user:
         st.markdown(f"""
@@ -190,6 +240,21 @@ def display_chat_message(message: dict, is_user: bool = True):
             </div>
             """, unsafe_allow_html=True)
 
+        # Audio playback if available; else on-demand Play button
+        if message.get("audio"):
+            st.audio(message["audio"], format=message.get("audio_mime", "audio/mp3"))
+        elif st.session_state.get("enable_tts_ui", False) and not st.session_state.get("in_demo", False):
+            play_key = f"play_tts_{index}"
+            if st.button("🔊 Play", key=play_key):
+                lang = st.session_state.get("tts_lang", "en")
+                to_say = (message.get("answer", "") or "")[:4000]
+                audio_bytes = synthesize_to_mp3_bytes(to_say, lang=lang)
+                if audio_bytes:
+                    st.audio(audio_bytes, format="audio/mp3")
+                else:
+                    st.warning("TTS failed to generate audio. Please check your network and try again.")
+        # Ensure only one audio element is rendered per message
+
 def main():
     """Main Streamlit application."""
     initialize_session_state()
@@ -220,6 +285,9 @@ def main():
     # Function calling toggle
     enable_functions = st.sidebar.checkbox("Enable Function Calling", value=True)
 
+    # Default TTS language (no Play button in UI; demo will auto-generate audio)
+    st.session_state["tts_lang"] = st.session_state.get("tts_lang", "en")
+
     # Initialize or recreate chatbot if settings changed
     if (st.session_state.chatbot is None or
         use_case != st.session_state.use_case):
@@ -237,6 +305,7 @@ def main():
 
     if st.sidebar.button("🎬 Run Demo"):
         with st.spinner("Running demonstration..."):
+            st.session_state.in_demo = True
             demo_questions = {
                 "it_helpdesk": [
                     "My computer is running very slowly",
@@ -257,6 +326,8 @@ def main():
 
             questions = demo_questions.get(use_case, demo_questions["it_helpdesk"])
 
+            ai_indices: list[int] = []
+            pending_texts: list[tuple[int, str]] = []
             for question in questions:
                 # Add user message
                 st.session_state.chat_history.append({
@@ -267,11 +338,21 @@ def main():
 
                 # Get bot response
                 response = st.session_state.chatbot.chat(question)
-                st.session_state.chat_history.append({
-                    **response,
-                    "is_user": False,
-                    "timestamp": datetime.now()
-                })
+                message_record = {**response, "is_user": False, "timestamp": datetime.now()}
+                st.session_state.chat_history.append(message_record)
+                ai_index = len(st.session_state.chat_history) - 1
+                ai_indices.append(ai_index)
+                pending_texts.append((ai_index, response.get("answer", "") or ""))
+
+            # Generate TTS in parallel after rendering all responses
+            lang = st.session_state.get("tts_lang", "en")
+            audio_map = generate_tts_concurrently(pending_texts, lang)
+            for idx, audio_bytes in audio_map.items():
+                st.session_state.chat_history[idx]["audio"] = audio_bytes
+                st.session_state.chat_history[idx]["audio_mime"] = "audio/mp3"
+
+            # demo finished
+            st.session_state.in_demo = False
 
     if st.sidebar.button("🗑️ Clear Chat"):
         st.session_state.chat_history = []
@@ -303,8 +384,8 @@ def main():
         chat_container = st.container()
 
         with chat_container:
-            for message in st.session_state.chat_history:
-                display_chat_message(message, message['is_user'])
+            for idx, message in enumerate(st.session_state.chat_history):
+                display_chat_message(message, message['is_user'], idx)
 
         # Chat options
         col_options = st.columns(2)
@@ -312,6 +393,17 @@ def main():
             use_rag = st.checkbox("Use RAG", value=True)
         with col_options[1]:
             use_functions_input = st.checkbox("Use Functions", value=enable_functions)
+
+        # TTS controls for normal chat; auto-enabled during demo
+        tts_enable_user = st.checkbox("🔊 Enable Text-to-Speech", value=False)
+        tts_lang = st.selectbox(
+            "TTS Language",
+            ["en", "vi"],
+            index=["en", "vi"].index(st.session_state.get("tts_lang", "en")),
+        )
+        st.session_state["tts_lang"] = tts_lang
+        # If demo is running, force-enable TTS regardless of checkbox
+        tts_enable = bool(st.session_state.get("in_demo", False) or tts_enable_user)
 
         # Chat input form - supports both Enter key and Send button
         with st.form(key="chat_form", clear_on_submit=True):
@@ -339,7 +431,7 @@ def main():
                 "timestamp": datetime.now()
             })
 
-            # Get bot response
+            # Get bot response synchronously
             with st.spinner("Thinking..."):
                 response = st.session_state.chatbot.chat(
                     user_input,
@@ -347,11 +439,23 @@ def main():
                     use_functions=use_functions_input
                 )
 
-                st.session_state.chat_history.append({
+                message_record = {
                     **response,
                     "is_user": False,
                     "timestamp": datetime.now()
-                })
+                }
+
+                # Optionally synthesize TTS and attach to message to avoid rework on reruns
+                if tts_enable and response.get("answer"):
+                    to_say = (response.get("answer", "") or "")[:4000]
+                    audio_bytes = synthesize_to_mp3_bytes(to_say, lang=tts_lang)
+                    if audio_bytes:
+                        message_record["audio"] = audio_bytes
+                        message_record["audio_mime"] = "audio/mp3"
+                    else:
+                        st.warning("Could not generate TTS audio. Ensure internet access and gTTS is installed.")
+
+                st.session_state.chat_history.append(message_record)
 
             st.rerun()
 
