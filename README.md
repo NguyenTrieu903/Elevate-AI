@@ -2,6 +2,8 @@
 
 A comprehensive Retrieval-Augmented Generation (RAG) chatbot system built with Langchain, FAISS, and Azure OpenAI. This project demonstrates how to create intelligent chatbots that combine external knowledge retrieval with language generation for accurate, context-aware responses.
 
+Link app: https://elevate-ai.streamlit.app/
+
 ## Features
 
 - **Vector Database Integration**: FAISS for fast similarity search
