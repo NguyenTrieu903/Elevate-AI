@@ -90,37 +90,25 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
         margin-bottom: 2rem;
     }
-
-    .chat-message {
+    
+    /* Improve chat interface spacing and scrolling */
+    .stChatMessage {
         padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 10px;
     }
-
-    .user-message {
-        background-color: #e3f2fd;
-        border-left: 4px solid #2196f3;
+    
+    /* Ensure chat input stays at bottom */
+    [data-testid="stChatInput"] {
+        position: sticky;
+        bottom: 0;
+        background-color: white;
+        z-index: 100;
+        padding-top: 1rem;
+        border-top: 1px solid #e0e0e0;
     }
-
-    .bot-message {
-        background-color: #f3e5f5;
-        border-left: 4px solid #9c27b0;
-    }
-
-    .function-call-info {
-        background-color: #fff3e0;
-        padding: 0.5rem;
-        border-radius: 5px;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .sources-info {
-        background-color: #e8f5e8;
-        padding: 0.5rem;
-        border-radius: 5px;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
+    
+    /* Smooth scrolling for chat messages */
+    .element-container:has([data-testid="stChatMessage"]) {
+        scroll-behavior: smooth;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -206,54 +194,43 @@ def create_chatbot(use_case: str, enable_functions: bool) -> RAGChatbot:
             st.info("Please make sure your .env file is configured with Azure OpenAI credentials.")
         return None
 
-def display_chat_message(message: dict, is_user: bool = True, index: int = 0):
-    """Display a chat message with appropriate styling."""
+def display_chat_message(message: dict, index: int = 0):
+    """Display a chat message using Streamlit's native chat components."""
+    is_user = message.get('is_user', False)
+    
     if is_user:
-        st.markdown(f"""
-        <div class="chat-message user-message">
-            <strong>👤 You:</strong><br>
-            {message['content']}
-        </div>
-        """, unsafe_allow_html=True)
+        with st.chat_message("user"):
+            st.write(message.get('content', ''))
     else:
-        # Bot message
-        st.markdown(f"""
-        <div class="chat-message bot-message">
-            <strong>🤖 Assistant:</strong><br>
-            {message['answer']}
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Show additional info
-        if message.get('method') == 'function_calling' and message.get('function_calls_made', 0) > 0:
-            st.markdown(f"""
-            <div class="function-call-info">
-                💡 <strong>Function Calls:</strong> Used {message['function_calls_made']} function call(s)
-            </div>
-            """, unsafe_allow_html=True)
-
-        elif message.get('sources'):
-            sources = ', '.join(message['sources'][:3])
-            st.markdown(f"""
-            <div class="sources-info">
-                📚 <strong>Sources:</strong> {sources}
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Audio playback if available; else on-demand Play button
-        if message.get("audio"):
-            st.audio(message["audio"], format=message.get("audio_mime", "audio/mp3"))
-        elif st.session_state.get("enable_tts_ui", False) and not st.session_state.get("in_demo", False):
-            play_key = f"play_tts_{index}"
-            if st.button("🔊 Play", key=play_key):
-                lang = st.session_state.get("tts_lang", "en")
-                to_say = (message.get("answer", "") or "")[:4000]
-                audio_bytes = synthesize_to_mp3_bytes(to_say, lang=lang)
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/mp3")
-                else:
-                    st.warning("TTS failed to generate audio. Please check your network and try again.")
-        # Ensure only one audio element is rendered per message
+        with st.chat_message("assistant"):
+            # Main response
+            st.write(message.get('answer', ''))
+            
+            # Show additional info
+            if message.get('method') == 'function_calling' and message.get('function_calls_made', 0) > 0:
+                st.info(f"💡 Used {message['function_calls_made']} function call(s)")
+            
+            elif message.get('sources'):
+                sources = ', '.join(message['sources'][:3])
+                st.caption(f"📚 Sources: {sources}")
+            
+            # Audio playback if available
+            if message.get("audio"):
+                st.audio(message["audio"], format=message.get("audio_mime", "audio/mp3"))
+            elif not st.session_state.get("in_demo", False):
+                # Show play button for on-demand TTS if TTS wasn't auto-generated
+                play_key = f"play_tts_{index}"
+                if st.button("🔊 Play Audio", key=play_key):
+                    lang = st.session_state.get("tts_lang", "en")
+                    to_say = (message.get("answer", "") or "")[:4000]
+                    audio_bytes = synthesize_to_mp3_bytes(to_say, lang=lang)
+                    if audio_bytes:
+                        st.audio(audio_bytes, format="audio/mp3")
+                        # Store audio in message for future renders
+                        message["audio"] = audio_bytes
+                        message["audio_mime"] = "audio/mp3"
+                    else:
+                        st.warning("TTS failed to generate audio. Please check your network and try again.")
 
 def main():
     """Main Streamlit application."""
@@ -304,60 +281,70 @@ def main():
     st.sidebar.header("🎮 Actions")
 
     if st.sidebar.button("🎬 Run Demo"):
-        with st.spinner("Running demonstration..."):
-            st.session_state.in_demo = True
-            demo_questions = {
-                "it_helpdesk": [
-                    "My computer is running very slowly",
-                    "What's the status of printer01?",
-                    "How do I connect to the VPN?"
-                ],
-                "customer_support": [
-                    "How can I track my order?",
-                    "What's the status of order ORD123456?",
-                    "Tell me about wireless headphones"
-                ],
-                "hr_assistant": [
-                    "How do I request time off?",
-                    "What's my leave balance for EMP001?",
-                    "Tell me about health insurance"
-                ]
+        st.session_state.in_demo = True
+        demo_questions = {
+            "it_helpdesk": [
+                "My computer is running very slowly",
+                "What's the status of printer01?",
+                "How do I connect to the VPN?"
+            ],
+            "customer_support": [
+                "How can I track my order?",
+                "What's the status of order ORD123456?",
+                "Tell me about wireless headphones"
+            ],
+            "hr_assistant": [
+                "How do I request time off?",
+                "What's my leave balance for EMP001?",
+                "Tell me about health insurance"
+            ]
+        }
+
+        questions = demo_questions.get(use_case, demo_questions["it_helpdesk"])
+        
+        # Clear existing chat for demo
+        st.session_state.chat_history = []
+        
+        # Process demo questions
+        ai_indices: list[int] = []
+        pending_texts: list[tuple[int, str]] = []
+        
+        for question in questions:
+            # Add user message
+            user_msg = {
+                "content": question,
+                "is_user": True,
+                "timestamp": datetime.now()
             }
+            st.session_state.chat_history.append(user_msg)
 
-            questions = demo_questions.get(use_case, demo_questions["it_helpdesk"])
-
-            ai_indices: list[int] = []
-            pending_texts: list[tuple[int, str]] = []
-            for question in questions:
-                # Add user message
-                st.session_state.chat_history.append({
-                    "content": question,
-                    "is_user": True,
-                    "timestamp": datetime.now()
-                })
-
-                # Get bot response
+            # Get bot response
+            with st.spinner(f"Processing: {question[:50]}..."):
                 response = st.session_state.chatbot.chat(question)
-                message_record = {**response, "is_user": False, "timestamp": datetime.now()}
-                st.session_state.chat_history.append(message_record)
-                ai_index = len(st.session_state.chat_history) - 1
-                ai_indices.append(ai_index)
-                pending_texts.append((ai_index, response.get("answer", "") or ""))
+            
+            message_record = {**response, "is_user": False, "timestamp": datetime.now()}
+            st.session_state.chat_history.append(message_record)
+            ai_index = len(st.session_state.chat_history) - 1
+            ai_indices.append(ai_index)
+            pending_texts.append((ai_index, response.get("answer", "") or ""))
 
-            # Generate TTS in parallel after rendering all responses
-            lang = st.session_state.get("tts_lang", "en")
+        # Generate TTS in parallel after all responses
+        lang = st.session_state.get("tts_lang", "en")
+        if pending_texts:
             audio_map = generate_tts_concurrently(pending_texts, lang)
             for idx, audio_bytes in audio_map.items():
                 st.session_state.chat_history[idx]["audio"] = audio_bytes
                 st.session_state.chat_history[idx]["audio_mime"] = "audio/mp3"
 
-            # demo finished
-            st.session_state.in_demo = False
+        # Demo finished
+        st.session_state.in_demo = False
+        st.rerun()
 
     if st.sidebar.button("🗑️ Clear Chat"):
         st.session_state.chat_history = []
         if st.session_state.chatbot:
             st.session_state.chatbot.clear_conversation()
+        st.success("Chat cleared!")
         st.rerun()
 
     # Show chatbot statistics
@@ -380,83 +367,90 @@ def main():
     with col1:
         st.header("💬 Chat")
 
-        # Chat history display
-        chat_container = st.container()
-
-        with chat_container:
-            for idx, message in enumerate(st.session_state.chat_history):
-                display_chat_message(message, message['is_user'], idx)
+        # Display chat history
+        for idx, message in enumerate(st.session_state.chat_history):
+            display_chat_message(message, idx)
 
         # Chat options
-        col_options = st.columns(2)
-        with col_options[0]:
-            use_rag = st.checkbox("Use RAG", value=True)
-        with col_options[1]:
-            use_functions_input = st.checkbox("Use Functions", value=enable_functions)
+        with st.expander("⚙️ Chat Options", expanded=False):
+            col_options = st.columns(2)
+            with col_options[0]:
+                use_rag = st.checkbox("Use RAG", value=True, key="use_rag")
+            with col_options[1]:
+                use_functions_input = st.checkbox("Use Functions", value=enable_functions, key="use_functions")
 
-        # TTS controls for normal chat; auto-enabled during demo
-        tts_enable_user = st.checkbox("🔊 Enable Text-to-Speech", value=False)
-        tts_lang = st.selectbox(
-            "TTS Language",
-            ["en", "vi"],
-            index=["en", "vi"].index(st.session_state.get("tts_lang", "en")),
-        )
-        st.session_state["tts_lang"] = tts_lang
-        # If demo is running, force-enable TTS regardless of checkbox
-        tts_enable = bool(st.session_state.get("in_demo", False) or tts_enable_user)
+            # TTS controls for normal chat; auto-enabled during demo
+            tts_enable_user = st.checkbox("🔊 Enable Text-to-Speech", value=False, key="tts_enable")
+            tts_lang = st.selectbox(
+                "TTS Language",
+                ["en", "vi"],
+                index=["en", "vi"].index(st.session_state.get("tts_lang", "en")),
+                key="tts_lang_select"
+            )
+            st.session_state["tts_lang"] = tts_lang
+            # If demo is running, force-enable TTS regardless of checkbox
+            tts_enable = bool(st.session_state.get("in_demo", False) or tts_enable_user)
 
-        # Chat input form - supports both Enter key and Send button
-        with st.form(key="chat_form", clear_on_submit=True):
-            input_col, send_col = st.columns([5, 1])
+        # Chat input - uses Streamlit's native chat_input which handles Enter key automatically
+        if prompt := st.chat_input("Ask me anything..."):
+            # Display user message immediately (like ChatGPT) - appears instantly
+            with st.chat_message("user"):
+                st.write(prompt)
             
-            with input_col:
-                user_input = st.text_input(
-                    "Type your message:",
-                    key="user_input",
-                    placeholder="Ask me anything... (Press Enter or click Send)",
-                    label_visibility="collapsed"
-                )
-            
-            with send_col:
-                st.write("")  # Spacing
-                st.write("")  # Spacing
-                send_button = st.form_submit_button("Send 📤", use_container_width=True)
-        
-        # Process user input when form is submitted (Enter key or Send button)
-        if send_button and user_input.strip():
-            # Add user message to history
-            st.session_state.chat_history.append({
-                "content": user_input,
+            # Add user message to history immediately
+            user_message = {
+                "content": prompt,
                 "is_user": True,
                 "timestamp": datetime.now()
-            })
-
-            # Get bot response synchronously
-            with st.spinner("Thinking..."):
+            }
+            st.session_state.chat_history.append(user_message)
+            
+            # Show assistant message with typing indicator (like ChatGPT)
+            with st.chat_message("assistant"):
+                # Create a placeholder for the response
+                message_placeholder = st.empty()
+                
+                # Show typing indicator (ChatGPT-style)
+                with message_placeholder.container():
+                    st.markdown("_Thinking..._")
+                
+                # Generate bot response
                 response = st.session_state.chatbot.chat(
-                    user_input,
+                    prompt,
                     use_rag=use_rag,
                     use_functions=use_functions_input
                 )
-
-                message_record = {
-                    **response,
-                    "is_user": False,
-                    "timestamp": datetime.now()
-                }
-
-                # Optionally synthesize TTS and attach to message to avoid rework on reruns
+                
+                # Replace typing indicator with actual response
+                with message_placeholder.container():
+                    st.write(response.get('answer', ''))
+                
+                # Show additional info below the response
+                if response.get('method') == 'function_calling' and response.get('function_calls_made', 0) > 0:
+                    st.info(f"💡 Used {response['function_calls_made']} function call(s)")
+                
+                elif response.get('sources'):
+                    sources = ', '.join(response['sources'][:3])
+                    st.caption(f"📚 Sources: {sources}")
+                
+                # Optionally synthesize TTS
                 if tts_enable and response.get("answer"):
                     to_say = (response.get("answer", "") or "")[:4000]
                     audio_bytes = synthesize_to_mp3_bytes(to_say, lang=tts_lang)
                     if audio_bytes:
-                        message_record["audio"] = audio_bytes
-                        message_record["audio_mime"] = "audio/mp3"
-                    else:
-                        st.warning("Could not generate TTS audio. Ensure internet access and gTTS is installed.")
-
-                st.session_state.chat_history.append(message_record)
-
+                        st.audio(audio_bytes, format="audio/mp3")
+                        response["audio"] = audio_bytes
+                        response["audio_mime"] = "audio/mp3"
+            
+            # Add bot response to history
+            message_record = {
+                **response,
+                "is_user": False,
+                "timestamp": datetime.now()
+            }
+            st.session_state.chat_history.append(message_record)
+            
+            # Rerun to sync everything and prepare for next input
             st.rerun()
 
     with col2:
