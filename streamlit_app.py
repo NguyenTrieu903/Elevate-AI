@@ -221,8 +221,15 @@ def _convert_datetime_to_str(obj, is_audio=False):
         is_audio: Whether this is audio data (to mark it for later decoding)
     """
     try:
+        # Handle None
+        if obj is None:
+            return None
+        
+        # Handle datetime
         if isinstance(obj, datetime):
             return obj.isoformat()
+        
+        # Handle bytes
         elif isinstance(obj, bytes):
             # Convert bytes to base64 string for JSON serialization
             # Mark audio bytes so we can decode them later
@@ -233,38 +240,125 @@ def _convert_datetime_to_str(obj, is_audio=False):
                 }
             else:
                 return base64.b64encode(obj).decode('utf-8')
+        
+        # Handle dict
         elif isinstance(obj, dict):
             # Don't recurse into our own marker dicts
             if obj.get("_type") == "base64_audio":
                 return obj
             # Check if this dict contains audio field
             is_audio_field = "audio" in obj
-            return {
-                key: _convert_datetime_to_str(value, is_audio=(is_audio_field and key == "audio"))
-                for key, value in obj.items()
-            }
+            converted_dict = {}
+            for key, value in obj.items():
+                # Convert key to string if needed
+                str_key = str(key) if not isinstance(key, (str, int, float, bool)) else key
+                converted_value = _convert_datetime_to_str(value, is_audio=(is_audio_field and key == "audio"))
+                converted_dict[str_key] = converted_value
+            return converted_dict
+        
+        # Handle list
         elif isinstance(obj, list):
             return [_convert_datetime_to_str(item, is_audio) for item in obj]
+        
+        # Handle tuple
         elif isinstance(obj, tuple):
             return tuple(_convert_datetime_to_str(item, is_audio) for item in obj)
-        else:
+        
+        # Handle set
+        elif isinstance(obj, set):
+            return list(_convert_datetime_to_str(item, is_audio) for item in obj)
+        
+        # Handle basic JSON-serializable types
+        elif isinstance(obj, (str, int, float, bool)):
             return obj
+        
+        # Handle numpy types (common in ML/AI contexts)
+        elif hasattr(obj, 'item'):  # numpy scalar
+            return obj.item()
+        elif hasattr(obj, 'tolist'):  # numpy array
+            return obj.tolist()
+        
+        # For any other type, try to convert to string
+        else:
+            try:
+                # Try JSON serialization test
+                json.dumps(obj)
+                return obj
+            except (TypeError, ValueError):
+                # If it fails, convert to string representation
+                return str(obj)
+    
     except Exception as e:
-        # If conversion fails, return None to avoid breaking export
-        # This handles any unexpected types gracefully
-        return None
+        # If conversion fails, return string representation to avoid breaking export
+        try:
+            return str(obj)
+        except:
+            return None
+
+def _ensure_serializable(obj):
+    """Ensure object is JSON serializable by converting problematic types."""
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return _convert_datetime_to_str(obj)
 
 def export_chat_history(chat_history: List[Dict]) -> str:
     """Export chat history to JSON string."""
-    # Convert datetime objects to strings before serialization
-    serializable_history = _convert_datetime_to_str(chat_history)
+    try:
+        # Deep copy to avoid modifying original
+        import copy
+        history_copy = copy.deepcopy(chat_history)
+        
+        # Convert all non-serializable objects
+        serializable_history = _convert_datetime_to_str(history_copy)
+        
+        # Double-check serializability
+        serializable_history = _ensure_serializable(serializable_history)
+        
+        export_data = {
+            "export_date": datetime.now().isoformat(),
+            "chat_history": serializable_history,
+            "version": "1.0"
+        }
+        
+        # Try to serialize
+        try:
+            return json.dumps(export_data, indent=2, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
+            # If still fails, clean up more aggressively
+            cleaned_history = []
+            for msg in serializable_history:
+                if not isinstance(msg, dict):
+                    continue
+                cleaned_msg = {}
+                for key, value in msg.items():
+                    try:
+                        # Test serializability
+                        json.dumps({key: value})
+                        cleaned_msg[key] = value
+                    except (TypeError, ValueError):
+                        # Convert to string or skip
+                        if value is None:
+                            cleaned_msg[key] = None
+                        else:
+                            try:
+                                cleaned_msg[key] = str(value)
+                            except:
+                                pass  # Skip if can't convert
+                cleaned_history.append(cleaned_msg)
+            
+            export_data["chat_history"] = cleaned_history
+            return json.dumps(export_data, indent=2, ensure_ascii=False)
     
-    export_data = {
-        "export_date": datetime.now().isoformat(),
-        "chat_history": serializable_history,
-        "version": "1.0"
-    }
-    return json.dumps(export_data, indent=2, ensure_ascii=False)
+    except Exception as e:
+        # Last resort: return minimal export with error info
+        return json.dumps({
+            "export_date": datetime.now().isoformat(),
+            "chat_history": [],
+            "version": "1.0",
+            "error": f"Export failed: {str(e)}"
+        }, indent=2, ensure_ascii=False)
 
 def import_chat_history(json_str: str) -> List[Dict]:
     """Import chat history from JSON string."""
@@ -556,14 +650,18 @@ def main():
     
     # Export button
     if st.session_state.chat_history:
-        export_json = export_chat_history(st.session_state.chat_history)
-        st.sidebar.download_button(
-            label="📥 Export Chat History",
-            data=export_json,
-            file_name=f"chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
-            use_container_width=True
-        )
+        try:
+            export_json = export_chat_history(st.session_state.chat_history)
+            st.sidebar.download_button(
+                label="📥 Export Chat History",
+                data=export_json,
+                file_name=f"chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.sidebar.error(f"⚠️ Cannot export: {str(e)}")
+            st.sidebar.info("Try clearing chat and starting fresh")
     else:
         st.sidebar.info("No chat history to export")
     
