@@ -50,8 +50,7 @@ class RetrievalChain:
 
     def _create_prompt_template(self) -> ChatPromptTemplate:
         """Create prompt template based on use case."""
-        system_prompts = {
-            "it_helpdesk": """You are an experienced IT helpdesk assistant. Help users solve technical problems by:
+        system_message = """You are an experienced IT helpdesk assistant. Help users solve technical problems by:
 1. Using the provided knowledge base context to give accurate solutions
 2. Providing step-by-step troubleshooting instructions
 3. Suggesting when to contact IT support for complex issues
@@ -60,32 +59,7 @@ class RetrievalChain:
 Context from knowledge base:
 {context}
 
-If the context doesn't contain relevant information, acknowledge this and provide general guidance or suggest contacting IT support.""",
-
-            "customer_support": """You are a friendly customer support representative. Assist customers by:
-1. Using the knowledge base to provide accurate information about policies and procedures
-2. Helping with order inquiries, returns, and product questions
-3. Maintaining a helpful and professional tone
-4. Escalating complex issues when appropriate
-
-Context from knowledge base:
-{context}
-
-If you cannot find specific information in the context, be honest about limitations and suggest appropriate next steps.""",
-
-            "hr_assistant": """You are a knowledgeable HR assistant. Help employees with:
-1. Company policies and procedures using the provided context
-2. Benefits information and enrollment guidance
-3. Leave requests and HR processes
-4. Professional development opportunities
-
-Context from knowledge base:
-{context}
-
-Always refer employees to HR for confidential matters or complex policy interpretations not covered in the knowledge base."""
-        }
-
-        system_message = system_prompts.get(self.use_case, system_prompts["it_helpdesk"])
+If the context doesn't contain relevant information, acknowledge this and provide general guidance or suggest contacting IT support."""
 
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -142,12 +116,6 @@ Always refer employees to HR for confidential matters or complex policy interpre
             if self.use_case == "it_helpdesk":
                 from mock_data.it_helpdesk import get_it_helpdesk_data
                 documents = get_it_helpdesk_data()
-            elif self.use_case == "customer_support":
-                from mock_data.customer_support import get_customer_support_data
-                documents = get_customer_support_data()
-            elif self.use_case == "hr_assistant":
-                from mock_data.hr_assistant import get_hr_assistant_data
-                documents = get_hr_assistant_data()
             else:
                 raise ValueError(f"Unknown use case: {self.use_case}")
 
@@ -176,6 +144,11 @@ Always refer employees to HR for confidential matters or complex policy interpre
         try:
             # Retrieve relevant documents
             retrieved_docs = self.vector_store.search(question, k=4)
+            
+            # Debug: Log if no documents retrieved
+            if not retrieved_docs:
+                print(f"⚠️ Warning: No documents retrieved for query: {question}")
+                print(f"   Vector store status: {self.vector_store.get_stats()}")
 
             # Generate response using RAG chain
             response = self.chain.invoke({
@@ -186,10 +159,14 @@ Always refer employees to HR for confidential matters or complex policy interpre
             return {
                 "answer": response,
                 "retrieved_documents": retrieved_docs,
-                "sources": [doc['metadata'].get('source', 'Unknown') for doc in retrieved_docs]
+                "sources": [doc['metadata'].get('source', 'Unknown') for doc in retrieved_docs] if retrieved_docs else []
             }
 
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"❌ Error in RAG retrieval: {str(e)}")
+            print(f"   Traceback: {error_trace}")
             return {
                 "answer": f"I apologize, but I encountered an error processing your request: {str(e)}",
                 "retrieved_documents": [],

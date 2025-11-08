@@ -26,7 +26,7 @@ class FunctionCaller:
         """Initialize function caller with specified use case.
 
         Args:
-            use_case: The use case for function calling (it_helpdesk, customer_support, hr_assistant)
+            use_case: The use case for function calling (it_helpdesk)
         """
         self.use_case = use_case
         self.functions: Dict[str, FunctionDefinition] = {}
@@ -52,10 +52,8 @@ class FunctionCaller:
         """Register functions based on the use case."""
         if self.use_case == "it_helpdesk":
             self._register_it_functions()
-        elif self.use_case == "customer_support":
-            self._register_customer_functions()
-        elif self.use_case == "hr_assistant":
-            self._register_hr_functions()
+        else:
+            raise ValueError(f"Unknown use case: {self.use_case}")
 
     def _register_it_functions(self) -> None:
         """Register IT helpdesk functions."""
@@ -111,140 +109,6 @@ class FunctionCaller:
                 "required": ["keywords"]
             },
             handler=lambda keywords: search_solutions(keywords)
-        )
-
-    def _register_customer_functions(self) -> None:
-        """Register customer support functions."""
-        from mock_data.customer_support import get_order_status, get_product_info, calculate_shipping
-
-        # Order status function
-        self.register_function(
-            name="check_order_status",
-            description="Check the status of a customer order",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "order_id": {
-                        "type": "string",
-                        "description": "The order ID to check"
-                    }
-                },
-                "required": ["order_id"]
-            },
-            handler=lambda order_id: get_order_status(order_id)
-        )
-
-        # Product information function
-        self.register_function(
-            name="get_product_info",
-            description="Get information about products including price, availability, and specifications",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "product_name": {
-                        "type": "string",
-                        "description": "Name of the product to look up"
-                    }
-                },
-                "required": ["product_name"]
-            },
-            handler=lambda product_name: get_product_info(product_name)
-        )
-
-        # Shipping calculation function
-        self.register_function(
-            name="calculate_shipping_cost",
-            description="Calculate shipping cost based on order total and shipping method",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "order_total": {
-                        "type": "number",
-                        "description": "Total value of the order"
-                    },
-                    "shipping_type": {
-                        "type": "string",
-                        "enum": ["standard", "express", "overnight"],
-                        "description": "Type of shipping"
-                    }
-                },
-                "required": ["order_total"]
-            },
-            handler=lambda order_total, shipping_type="standard": calculate_shipping(order_total, shipping_type)
-        )
-
-    def _register_hr_functions(self) -> None:
-        """Register HR assistant functions."""
-        from mock_data.hr_assistant import (
-            get_leave_balance, get_benefits_info,
-            get_company_holidays, check_holiday_conflict, get_available_training
-        )
-
-        # Leave balance function
-        self.register_function(
-            name="check_leave_balance",
-            description="Check employee leave balance (vacation, sick, personal days)",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "employee_id": {
-                        "type": "string",
-                        "description": "Employee ID (e.g., EMP001)"
-                    }
-                },
-                "required": ["employee_id"]
-            },
-            handler=lambda employee_id: get_leave_balance(employee_id)
-        )
-
-        # Benefits information function
-        self.register_function(
-            name="get_benefits_information",
-            description="Get information about employee benefits",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "benefit_type": {
-                        "type": "string",
-                        "enum": ["health_insurance", "dental_insurance", "vision_insurance", "401k"],
-                        "description": "Type of benefit to get information about"
-                    }
-                }
-            },
-            handler=lambda benefit_type=None: get_benefits_info(benefit_type)
-        )
-
-        # Company holidays function
-        self.register_function(
-            name="get_company_holidays",
-            description="Get list of company holidays for a specific year",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "year": {
-                        "type": "integer",
-                        "description": "Year to get holidays for"
-                    }
-                }
-            },
-            handler=lambda year=2025: get_company_holidays(year)
-        )
-
-        # Training courses function
-        self.register_function(
-            name="get_training_courses",
-            description="Get available training courses",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "category": {
-                        "type": "string",
-                        "enum": ["compliance", "professional", "technical"],
-                        "description": "Category of training courses"
-                    }
-                }
-            },
-            handler=lambda category=None: get_available_training(category)
         )
 
     def register_function(self, name: str, description: str, parameters: Dict[str, Any], handler: Callable) -> None:

@@ -18,7 +18,7 @@ class RAGChatbot:
         """Initialize RAG chatbot.
 
         Args:
-            use_case: The use case (it_helpdesk, customer_support, hr_assistant)
+            use_case: The use case (it_helpdesk)
             enable_functions: Whether to enable function calling
         """
         self.use_case = use_case
@@ -64,13 +64,16 @@ class RAGChatbot:
                 ]
 
                 func_result = self.function_caller.chat_with_functions(messages)
+                function_calls_made = func_result.get("function_calls_made", 0)
 
-                if "content" in func_result and func_result["content"]:
-                    # Function calling provided a response
+                # Only use function calling response if a function was actually called
+                # If no function was called, fall through to RAG to get context from knowledge base
+                if "content" in func_result and func_result["content"] and function_calls_made > 0:
+                    # Function calling provided a response (and actually called functions)
                     response.update({
                         "answer": func_result["content"],
                         "method": "function_calling",
-                        "function_calls_made": func_result.get("function_calls_made", 0),
+                        "function_calls_made": function_calls_made,
                         "success": True
                     })
 
@@ -78,24 +81,47 @@ class RAGChatbot:
                     self.conversation_manager.add_exchange(user_input, func_result["content"])
 
                     return response
+                # If function_calls_made == 0, continue to RAG below
 
             if use_rag:
                 # Use RAG retrieval and generation
-                rag_result = self.retrieval_chain.chat(
-                    user_input,
-                    self.conversation_manager.get_history()
-                )
+                try:
+                    rag_result = self.retrieval_chain.chat(
+                        user_input,
+                        self.conversation_manager.get_history()
+                    )
 
-                response.update({
-                    "answer": rag_result["answer"],
-                    "method": "rag_retrieval",
-                    "retrieved_documents": rag_result["retrieved_documents"],
-                    "sources": rag_result["sources"],
-                    "success": True
-                })
+                    # Ensure we always have retrieved_documents and sources
+                    retrieved_docs = rag_result.get("retrieved_documents", [])
+                    sources = rag_result.get("sources", [])
+                    
+                    # Debug logging
+                    if not retrieved_docs:
+                        print(f"⚠️ Warning: RAG returned no documents for: {user_input}")
+                    
+                    response.update({
+                        "answer": rag_result.get("answer", ""),
+                        "method": "rag_retrieval",
+                        "retrieved_documents": retrieved_docs,
+                        "sources": sources,
+                        "success": True
+                    })
 
-                # Add to conversation history
-                self.conversation_manager.add_exchange(user_input, rag_result["answer"])
+                    # Add to conversation history
+                    self.conversation_manager.add_exchange(user_input, rag_result.get("answer", ""))
+                except Exception as e:
+                    import traceback
+                    print(f"❌ Error in RAG chat: {str(e)}")
+                    print(traceback.format_exc())
+                    # Still return RAG method but with error
+                    response.update({
+                        "answer": f"Error in RAG retrieval: {str(e)}",
+                        "method": "rag_retrieval",
+                        "retrieved_documents": [],
+                        "sources": [],
+                        "success": False,
+                        "error": str(e)
+                    })
 
             else:
                 # Fallback response
@@ -117,15 +143,7 @@ class RAGChatbot:
 
     def _get_system_message(self) -> str:
         """Get system message based on use case."""
-        system_messages = {
-            "it_helpdesk": "You are an experienced IT helpdesk assistant. Help users with technical problems, device status checks, and software information. Use available functions when needed to provide accurate information.",
-
-            "customer_support": "You are a friendly customer support representative. Help customers with orders, products, shipping, and account issues. Use available functions to check real-time information when appropriate.",
-
-            "hr_assistant": "You are a knowledgeable HR assistant. Help employees with benefits, leave requests, company policies, and training information. Use available functions to access employee-specific data when needed."
-        }
-
-        return system_messages.get(self.use_case, system_messages["it_helpdesk"])
+        return "You are an experienced IT helpdesk assistant. Help users with technical problems, device status checks, and software information. Use available functions when needed to provide accurate information."
 
     def _format_chat_history(self) -> List[Dict[str, str]]:
         """Format chat history for function calling."""
@@ -212,28 +230,12 @@ class RAGChatbot:
 
     def _get_demo_questions(self) -> List[str]:
         """Get demo questions based on use case."""
-        demo_sets = {
-            "it_helpdesk": [
-                "My computer is running very slowly",
-                "What's the status of printer01?",
-                "How do I connect to the company VPN?",
-                "Can you check if server01 is working?"
-            ],
-            "customer_support": [
-                "How can I track my order?",
-                "What's the status of order ORD123456?",
-                "Tell me about the wireless headphones",
-                "How much is shipping for a $75 order?"
-            ],
-            "hr_assistant": [
-                "How do I request time off?",
-                "What's my leave balance for EMP001?",
-                "Tell me about health insurance benefits",
-                "What company holidays do we have in 2025?"
-            ]
-        }
-
-        return demo_sets.get(self.use_case, demo_sets["it_helpdesk"])
+        return [
+            "My computer is running very slowly",
+            "What's the status of printer01?",
+            "How do I connect to the company VPN?",
+            "Can you check if server01 is working?"
+        ]
 
 
 class ChatInterface:
