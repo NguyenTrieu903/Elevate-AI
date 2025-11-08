@@ -91,17 +91,14 @@ class RAGChatbot:
                         self.conversation_manager.get_history()
                     )
 
-                    # Ensure we always have retrieved_documents and sources
+                    # Get method from result (could be "rag_retrieval" or "llm_direct")
+                    method = rag_result.get("method", "rag_retrieval")
                     retrieved_docs = rag_result.get("retrieved_documents", [])
                     sources = rag_result.get("sources", [])
                     
-                    # Debug logging
-                    if not retrieved_docs:
-                        print(f"⚠️ Warning: RAG returned no documents for: {user_input}")
-                    
                     response.update({
                         "answer": rag_result.get("answer", ""),
-                        "method": "rag_retrieval",
+                        "method": method,
                         "retrieved_documents": retrieved_docs,
                         "sources": sources,
                         "success": True

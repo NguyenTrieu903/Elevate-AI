@@ -51,15 +51,19 @@ class RetrievalChain:
     def _create_prompt_template(self) -> ChatPromptTemplate:
         """Create prompt template based on use case."""
         system_message = """You are an experienced IT helpdesk assistant. Help users solve technical problems by:
-1. Using the provided knowledge base context to give accurate solutions
+1. Using the provided knowledge base context to give accurate solutions when available
 2. Providing step-by-step troubleshooting instructions
-3. Suggesting when to contact IT support for complex issues
+3. Using your general IT knowledge to help when context doesn't have specific information
 4. Being concise but thorough in your explanations
 
 Context from knowledge base:
 {context}
 
-If the context doesn't contain relevant information, acknowledge this and provide general guidance or suggest contacting IT support."""
+IMPORTANT: 
+- If the context above contains relevant information, use it to provide accurate answers
+- If the context is empty or doesn't have specific information, use your general IT knowledge to provide helpful guidance
+- Always try to be helpful and provide useful information based on your knowledge
+- Only suggest contacting IT support if the issue is truly complex or requires system-level access"""
 
         return ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -72,7 +76,7 @@ If the context doesn't contain relevant information, acknowledge this and provid
         def format_docs(docs):
             """Format retrieved documents for context."""
             if not docs:
-                return "No relevant information found in the knowledge base."
+                return ""  # Return empty string instead of message, let LLM use its knowledge
 
             formatted = []
             for i, doc in enumerate(docs, 1):
@@ -80,15 +84,18 @@ If the context doesn't contain relevant information, acknowledge this and provid
                 metadata = doc['metadata']
                 source = metadata.get('source', 'Unknown source')
                 category = metadata.get('category', 'General')
-
-                formatted.append(f"Document {i} ({category} - {source}):\n{content}")
+                score = doc.get('score', 0)
+                
+                # Include relevance score for transparency
+                formatted.append(f"Document {i} ({category} - {source}, relevance: {score:.2f}):\n{content}")
 
             return "\n\n".join(formatted)
 
         def retrieve_docs(input_dict):
             """Retrieve relevant documents."""
             question = input_dict["question"]
-            docs = self.vector_store.search(question, k=4)
+            # Use same threshold as in chat() method
+            docs = self.vector_store.search(question, k=4, score_threshold=0.5)
             return format_docs(docs)
 
         # Create the chain
@@ -142,15 +149,36 @@ If the context doesn't contain relevant information, acknowledge this and provid
             chat_history = []
 
         try:
-            # Retrieve relevant documents
-            retrieved_docs = self.vector_store.search(question, k=4)
+            # Retrieve relevant documents with minimum relevance threshold
+            retrieved_docs = self.vector_store.search(question, k=4, score_threshold=0.5)
             
-            # Debug: Log if no documents retrieved
+            # If no relevant documents found (similarity < 0.5), use LLM directly without context
             if not retrieved_docs:
-                print(f"⚠️ Warning: No documents retrieved for query: {question}")
-                print(f"   Vector store status: {self.vector_store.get_stats()}")
-
-            # Generate response using RAG chain
+                print(f"ℹ️ No relevant documents found (similarity < 0.5) for query: {question}")
+                print(f"   Using LLM directly without knowledge base context.")
+                
+                # Create a simple prompt without RAG context
+                direct_prompt = ChatPromptTemplate.from_messages([
+                    ("system", "You are an experienced IT helpdesk assistant. Help users with technical problems using your knowledge. Provide helpful, accurate information and step-by-step guidance. Be proactive and helpful in your responses."),
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    ("human", "{question}")
+                ])
+                
+                # Generate response directly from LLM without context
+                direct_chain = direct_prompt | self.llm | StrOutputParser()
+                response = direct_chain.invoke({
+                    "question": question,
+                    "chat_history": chat_history
+                })
+                
+                return {
+                    "answer": response,
+                    "retrieved_documents": [],
+                    "sources": [],
+                    "method": "llm_direct"  # Indicate this is direct LLM call
+                }
+            
+            # Generate response using RAG chain with context
             response = self.chain.invoke({
                 "question": question,
                 "chat_history": chat_history
@@ -159,7 +187,8 @@ If the context doesn't contain relevant information, acknowledge this and provid
             return {
                 "answer": response,
                 "retrieved_documents": retrieved_docs,
-                "sources": [doc['metadata'].get('source', 'Unknown') for doc in retrieved_docs] if retrieved_docs else []
+                "sources": [doc['metadata'].get('source', 'Unknown') for doc in retrieved_docs],
+                "method": "rag_retrieval"  # Indicate this is RAG with context
             }
 
         except Exception as e:

@@ -405,15 +405,18 @@ def display_chat_message(message: dict, index: int = 0):
             # Main response
             st.write(message.get('answer', ''))
             
-            # Show additional info (RAG only)
+            # Show additional info
             if message.get('method') == 'rag_retrieval':
                 # Show RAG indicator
                 retrieved_count = len(message.get('retrieved_documents', []))
                 if retrieved_count > 0:
-                    st.success(f"✅ Using RAG - Retrieved {retrieved_count} document(s) from knowledge base")
-                if message.get('sources'):
-                    sources = ', '.join(message['sources'][:3])
-                    st.caption(f"📚 Sources: {sources}")
+                    st.success(f"✅ Using RAG - Retrieved {retrieved_count} relevant document(s) from knowledge base")
+                    if message.get('sources'):
+                        sources = ', '.join(message['sources'][:3])
+                        st.caption(f"📚 Sources: {sources}")
+            elif message.get('method') == 'llm_direct':
+                # Show LLM direct indicator (no context from KB)
+                st.info("💡 Using LLM directly (no relevant information in knowledge base)")
             
             # Action buttons row
             col1, col2, col3, col4, col5 = st.columns(5)
@@ -826,15 +829,18 @@ def main():
                 with message_placeholder.container():
                     st.write(response.get('answer', ''))
                 
-                # Show additional info below the response (RAG only)
+                # Show additional info below the response
                 if response.get('method') == 'rag_retrieval':
                     # Show RAG indicator
                     retrieved_count = len(response.get('retrieved_documents', []))
                     if retrieved_count > 0:
-                        st.success(f"✅ Using RAG - Retrieved {retrieved_count} document(s) from knowledge base")
-                    if response.get('sources'):
-                        sources = ', '.join(response['sources'][:3])
-                        st.caption(f"📚 Sources: {sources}")
+                        st.success(f"✅ Using RAG - Retrieved {retrieved_count} relevant document(s) from knowledge base")
+                        if response.get('sources'):
+                            sources = ', '.join(response['sources'][:3])
+                            st.caption(f"📚 Sources: {sources}")
+                elif response.get('method') == 'llm_direct':
+                    # Show LLM direct indicator (no context from KB)
+                    st.info("💡 Using LLM directly (no relevant information in knowledge base)")
                 
                 # Optionally synthesize TTS
                 if tts_enable and response.get("answer"):
@@ -904,8 +910,14 @@ def main():
             
             if methods:
                 st.subheader("Response Methods")
+                method_display_names = {
+                    'rag_retrieval': 'RAG Retrieval',
+                    'llm_direct': 'LLM Direct (No KB)',
+                    'function_calling': 'Function Calling',
+                    'unknown': 'Unknown'
+                }
                 for method, count in methods.items():
-                    method_name = method.replace('_', ' ').title()
+                    method_name = method_display_names.get(method, method.replace('_', ' ').title())
                     st.progress(count / bot_count if bot_count > 0 else 0, text=f"{method_name}: {count}")
             
             # Average response length

@@ -105,13 +105,13 @@ class VectorStore:
         self.save_index()
         print(f"Added {len(docs)} documents to existing index")
 
-    def search(self, query: str, k: int = 4, score_threshold: float = 0.0) -> List[Dict[str, Any]]:
+    def search(self, query: str, k: int = 4, score_threshold: float = 0.5) -> List[Dict[str, Any]]:
         """Search for similar documents.
 
         Args:
             query: Search query
             k: Number of documents to return
-            score_threshold: Minimum similarity score threshold (default 0.0 to return all results)
+            score_threshold: Minimum similarity score threshold (default 0.5 to filter low-relevance results)
 
         Returns:
             List of similar documents with scores
@@ -128,6 +128,7 @@ class VectorStore:
             # FAISS returns distance (lower is better), convert to similarity
             similarity = 1 / (1 + score)
 
+            # Only include results above threshold (more relevant)
             if similarity >= score_threshold:
                 filtered_results.append({
                     "content": doc.page_content,
@@ -135,17 +136,7 @@ class VectorStore:
                     "score": similarity
                 })
 
-        # If no results after filtering, return top results anyway (for debugging)
-        if not filtered_results and results:
-            # Return top result even if below threshold
-            doc, score = results[0]
-            similarity = 1 / (1 + score)
-            filtered_results.append({
-                "content": doc.page_content,
-                "metadata": doc.metadata,
-                "score": similarity
-            })
-
+        # Return filtered results (empty if no relevant documents found)
         return filtered_results
 
     def save_index(self) -> None:
