@@ -9,7 +9,7 @@ Link app: https://elevate-ai.streamlit.app/
 - **Vector Database Integration**: FAISS for fast similarity search
 - **RAG Pipeline**: Langchain for prompt chains and conversational flows
 - **Function Calling**: Dynamic external data responses via Azure OpenAI
-- **Multiple Use Cases**: IT Helpdesk, Customer Support, HR Assistant, and more
+- **IT Helpdesk Use Case**: Technical troubleshooting and support
 - **Mock Data Generation**: Synthetic datasets for testing and development
 
 ## Setup Instructions

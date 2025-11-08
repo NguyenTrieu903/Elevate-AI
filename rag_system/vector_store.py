@@ -21,7 +21,7 @@ class VectorStore:
         """Initialize vector store with specified use case.
 
         Args:
-            use_case: The use case for the vector store (it_helpdesk, customer_support, hr_assistant)
+            use_case: The use case for the vector store (it_helpdesk)
         """
         self.use_case = use_case
         self.embeddings = self._initialize_embeddings()
@@ -105,13 +105,13 @@ class VectorStore:
         self.save_index()
         print(f"Added {len(docs)} documents to existing index")
 
-    def search(self, query: str, k: int = 4, score_threshold: float = 0.7) -> List[Dict[str, Any]]:
+    def search(self, query: str, k: int = 4, score_threshold: float = 0.5) -> List[Dict[str, Any]]:
         """Search for similar documents.
 
         Args:
             query: Search query
             k: Number of documents to return
-            score_threshold: Minimum similarity score threshold
+            score_threshold: Minimum similarity score threshold (default 0.5 to filter low-relevance results)
 
         Returns:
             List of similar documents with scores
@@ -128,6 +128,7 @@ class VectorStore:
             # FAISS returns distance (lower is better), convert to similarity
             similarity = 1 / (1 + score)
 
+            # Only include results above threshold (more relevant)
             if similarity >= score_threshold:
                 filtered_results.append({
                     "content": doc.page_content,
@@ -135,6 +136,7 @@ class VectorStore:
                     "score": similarity
                 })
 
+        # Return filtered results (empty if no relevant documents found)
         return filtered_results
 
     def save_index(self) -> None:
@@ -195,7 +197,7 @@ def create_vector_store_for_use_case(use_case: str, force_recreate: bool = False
     """Create vector store for a specific use case.
 
     Args:
-        use_case: The use case (it_helpdesk, customer_support, hr_assistant)
+        use_case: The use case (it_helpdesk)
         force_recreate: Whether to force recreation of existing index
 
     Returns:
@@ -205,12 +207,6 @@ def create_vector_store_for_use_case(use_case: str, force_recreate: bool = False
     if use_case == "it_helpdesk":
         from mock_data.it_helpdesk import get_it_helpdesk_data
         documents = get_it_helpdesk_data()
-    elif use_case == "customer_support":
-        from mock_data.customer_support import get_customer_support_data
-        documents = get_customer_support_data()
-    elif use_case == "hr_assistant":
-        from mock_data.hr_assistant import get_hr_assistant_data
-        documents = get_hr_assistant_data()
     else:
         raise ValueError(f"Unknown use case: {use_case}")
 

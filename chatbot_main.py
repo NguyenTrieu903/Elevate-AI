@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description="RAG Chatbot System")
     parser.add_argument(
         "--use-case",
-        choices=["it_helpdesk", "customer_support", "hr_assistant"],
+        choices=["it_helpdesk"],
         default="it_helpdesk",
         help="Choose the chatbot use case (default: it_helpdesk)"
     )

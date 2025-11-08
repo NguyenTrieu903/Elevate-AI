@@ -387,12 +387,11 @@ def display_chat_message(message: dict, index: int = 0):
                     if index > 0:
                         prev_message = st.session_state.chat_history[index - 1]
                         if prev_message.get('is_user'):
-                            use_rag = st.session_state.get('use_rag', True)
-                            use_functions = st.session_state.get('use_functions', True)
+                            # Always use RAG, no function calling
                             response = st.session_state.chatbot.chat(
                                 prev_message.get('content', ''),
-                                use_rag=use_rag,
-                                use_functions=use_functions
+                                use_rag=True,
+                                use_functions=False
                             )
                             # Update message
                             message.update({
@@ -407,12 +406,17 @@ def display_chat_message(message: dict, index: int = 0):
             st.write(message.get('answer', ''))
             
             # Show additional info
-            if message.get('method') == 'function_calling' and message.get('function_calls_made', 0) > 0:
-                st.info(f"💡 Used {message['function_calls_made']} function call(s)")
-            
-            elif message.get('sources'):
-                sources = ', '.join(message['sources'][:3])
-                st.caption(f"📚 Sources: {sources}")
+            if message.get('method') == 'rag_retrieval':
+                # Show RAG indicator
+                retrieved_count = len(message.get('retrieved_documents', []))
+                if retrieved_count > 0:
+                    st.success(f"✅ Using RAG - Retrieved {retrieved_count} relevant document(s) from knowledge base")
+                    if message.get('sources'):
+                        sources = ', '.join(message['sources'][:3])
+                        st.caption(f"📚 Sources: {sources}")
+            elif message.get('method') == 'llm_direct':
+                # Show LLM direct indicator (no context from KB)
+                st.info("💡 Using LLM directly (no relevant information in knowledge base)")
             
             # Action buttons row
             col1, col2, col3, col4, col5 = st.columns(5)
@@ -489,37 +493,27 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>🤖 RAG Chatbot System</h1>
-        <p>Intelligent chatbots with retrieval-augmented generation and function calling</p>
+        <p>Intelligent chatbot with retrieval-augmented generation</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Sidebar configuration
     st.sidebar.header("⚙️ Configuration")
 
-    # Use case selection
-    use_case = st.sidebar.selectbox(
-        "Select Use Case:",
-        ["it_helpdesk", "customer_support", "hr_assistant"],
-        index=["it_helpdesk", "customer_support", "hr_assistant"].index(st.session_state.use_case),
-        format_func=lambda x: {
-            "it_helpdesk": "🔧 IT Helpdesk",
-            "customer_support": "🛒 Customer Support",
-            "hr_assistant": "👥 HR Assistant"
-        }[x]
-    )
-
-    # Function calling toggle
-    enable_functions = st.sidebar.checkbox("Enable Function Calling", value=True)
+    # Use case selection (IT Helpdesk only)
+    use_case = "it_helpdesk"
+    st.session_state.use_case = use_case
 
     # Default TTS language (no Play button in UI; demo will auto-generate audio)
     st.session_state["tts_lang"] = st.session_state.get("tts_lang", "en")
 
     # Initialize or recreate chatbot if settings changed
+    # Always use RAG only (no function calling)
     if (st.session_state.chatbot is None or
         use_case != st.session_state.use_case):
 
         with st.spinner("Initializing chatbot..."):
-            st.session_state.chatbot = create_chatbot(use_case, enable_functions)
+            st.session_state.chatbot = create_chatbot(use_case, enable_functions=False)
             st.session_state.use_case = use_case
             st.session_state.chat_history = []  # Clear history on use case change
 
@@ -699,25 +693,13 @@ def main():
 
     if st.sidebar.button("🎬 Run Demo"):
         st.session_state.in_demo = True
-        demo_questions = {
-            "it_helpdesk": [
-                "My computer is running very slowly",
-                "What's the status of printer01?",
-                "How do I connect to the VPN?"
-            ],
-            "customer_support": [
-                "How can I track my order?",
-                "What's the status of order ORD123456?",
-                "Tell me about wireless headphones"
-            ],
-            "hr_assistant": [
-                "How do I request time off?",
-                "What's my leave balance for EMP001?",
-                "Tell me about health insurance"
-            ]
-        }
+        demo_questions = [
+            "My computer is running very slowly",
+            "What's the status of printer01?",
+            "How do I connect to the VPN?"
+        ]
 
-        questions = demo_questions.get(use_case, demo_questions["it_helpdesk"])
+        questions = demo_questions
         
         # Clear existing chat for demo
         st.session_state.chat_history = []
@@ -770,13 +752,7 @@ def main():
             stats = st.session_state.chatbot.get_chatbot_stats()
             st.sidebar.json(stats)
 
-    # Available functions
-    if st.session_state.chatbot and enable_functions:
-        functions = st.session_state.chatbot.get_available_functions()
-        if functions:
-            st.sidebar.header("🔧 Available Functions")
-            for func in functions:
-                st.sidebar.text(f"• {func}")
+    # RAG is always used, no function calling
 
     # Main chat interface
     col1, col2 = st.columns([3, 1])
@@ -802,11 +778,10 @@ def main():
 
         # Chat options
         with st.expander("⚙️ Chat Options", expanded=False):
-            col_options = st.columns(2)
-            with col_options[0]:
-                use_rag = st.checkbox("Use RAG", value=True, key="use_rag")
-            with col_options[1]:
-                use_functions_input = st.checkbox("Use Functions", value=enable_functions, key="use_functions")
+            # RAG is always enabled
+            use_rag = True
+            use_functions_input = False
+            st.info("ℹ️ RAG is always enabled for knowledge base retrieval")
 
             # TTS controls for normal chat; auto-enabled during demo
             tts_enable_user = st.checkbox("🔊 Enable Text-to-Speech", value=False, key="tts_enable")
@@ -855,12 +830,17 @@ def main():
                     st.write(response.get('answer', ''))
                 
                 # Show additional info below the response
-                if response.get('method') == 'function_calling' and response.get('function_calls_made', 0) > 0:
-                    st.info(f"💡 Used {response['function_calls_made']} function call(s)")
-                
-                elif response.get('sources'):
-                    sources = ', '.join(response['sources'][:3])
-                    st.caption(f"📚 Sources: {sources}")
+                if response.get('method') == 'rag_retrieval':
+                    # Show RAG indicator
+                    retrieved_count = len(response.get('retrieved_documents', []))
+                    if retrieved_count > 0:
+                        st.success(f"✅ Using RAG - Retrieved {retrieved_count} relevant document(s) from knowledge base")
+                        if response.get('sources'):
+                            sources = ', '.join(response['sources'][:3])
+                            st.caption(f"📚 Sources: {sources}")
+                elif response.get('method') == 'llm_direct':
+                    # Show LLM direct indicator (no context from KB)
+                    st.info("💡 Using LLM directly (no relevant information in knowledge base)")
                 
                 # Optionally synthesize TTS
                 if tts_enable and response.get("answer"):
@@ -886,40 +866,18 @@ def main():
         st.header("ℹ️ Information")
 
         # Use case description
-        descriptions = {
-            "it_helpdesk": """
-            **IT Helpdesk Assistant**
+        description = """
+        **IT Helpdesk Assistant**
 
-            Helps with:
-            - Technical troubleshooting
-            - Device status checks
-            - Software information
-            - Network issues
-            - Password resets
-            """,
-            "customer_support": """
-            **Customer Support Bot**
+        Helps with:
+        - Technical troubleshooting
+        - Device status checks
+        - Software information
+        - Network issues
+        - Password resets
+        """
 
-            Helps with:
-            - Order tracking
-            - Product information
-            - Shipping calculations
-            - Returns & exchanges
-            - Account management
-            """,
-            "hr_assistant": """
-            **HR Assistant Bot**
-
-            Helps with:
-            - Leave requests
-            - Benefits information
-            - Company policies
-            - Training courses
-            - Holiday schedules
-            """
-        }
-
-        st.markdown(descriptions.get(use_case, ""))
+        st.markdown(description)
 
         # Enhanced Analytics Dashboard
         if st.session_state.chat_history:
@@ -952,8 +910,14 @@ def main():
             
             if methods:
                 st.subheader("Response Methods")
+                method_display_names = {
+                    'rag_retrieval': 'RAG Retrieval',
+                    'llm_direct': 'LLM Direct (No KB)',
+                    'function_calling': 'Function Calling',
+                    'unknown': 'Unknown'
+                }
                 for method, count in methods.items():
-                    method_name = method.replace('_', ' ').title()
+                    method_name = method_display_names.get(method, method.replace('_', ' ').title())
                     st.progress(count / bot_count if bot_count > 0 else 0, text=f"{method_name}: {count}")
             
             # Average response length
